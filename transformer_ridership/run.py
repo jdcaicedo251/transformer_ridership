@@ -5,8 +5,36 @@ import tensorflow as tf
 print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 
 from data import tf_data
-from transformer_model_V3 import Transformer, MinMax
+from transformer_model_V3 import Transformer, MinMax, StandardNormlaization
 
+def run_predictions(model, train_data, test_data, metadata, normalizer):
+
+    print("")
+    print("Running Predictions")
+
+    list_stations = metadata['list_stations']
+
+    #Train Data
+    train_date_index = metadata['train_date_index']
+    train_features = train_data['features']
+    train_time_embeddings = train_data['time_embeddings']
+    train_spatial_embeddings = train_data['spatial_embeddings']
+    train_results = model.predict([train_features, train_time_embeddings, train_spatial_embeddings], batch_size = 64)
+    train_results = normalizer(train_results, reverse = True)
+    df_train_results = pd.DataFrame(train_results, columns = list_stations, index = train_date_index)
+
+
+    test_date_index = metadata['test_date_index']
+    test_features = test_data['features']
+    test_time_embeddings = test_data['time_embeddings']
+    test_spatial_embeddings = test_data['spatial_embeddings']
+    test_results = model.predict([test_features, test_time_embeddings, test_spatial_embeddings], batch_size = 64)
+    test_results = normalizer(test_results, reverse = True)
+    df_test_results = pd.DataFrame(test_results, columns = list_stations, index = test_date_index)
+
+    df = pd.concat((df_train_results,df_test_results), axis = 0 )
+    df = df.round(decimals = 0)
+    return df
 
 if __name__ == '__main__':
 
@@ -48,6 +76,16 @@ if __name__ == '__main__':
     parser.add_argument(
         "-k", "--key_dim", action="store",
         help="key dimension")
+    parser.add_argument(
+        "-o", "--out_name", action="store",
+        help="name of the output files")
+    parser.add_argument(
+        "-n", "--normalizer", action="store",
+        help="standard or minmax Normalization")
+    parser.add_argument(
+        "-ac", "--activation", action="store",
+        help="tensorflow activation function")
+
 
     args = parser.parse_args()
 
@@ -56,14 +94,16 @@ if __name__ == '__main__':
     dff = args.dff if args.dff else 2048
     num_heads = args.heads if args.heads else 8
     dropout_rate = args.drop_rate if args.drop_rate else 0.2
-    transactions_path = args.path if args.path else '../data/clean_transactions.csv'
-    stations_path = args.stations if args.stations else '../data/clean_stations_database_v2.csv'
+    transactions_path = args.path if args.path else '../data/transactions.parquet'
+    stations_path = args.stations if args.stations else '../data/stations_DB.parquet'
     aggregation = args.aggregation if args.aggregation else "15-mins"
     max_stations = args.num_stations if args.num_stations else None
     max_transactions = args.size if args.size else None
     train_date = args.train_date if args.train_date else '2018-08-01'
     key_dim = args.key_dim if args.key_dim else 64
-
+    out_name = args.out_name if args.out_name else "default"
+    normalizer = args.normalizer if args.normalizer else "minmax"
+    activation = args.activation if args.activation else "relu"
 
     train_data, test_data, metadata = tf_data(
         transactions_path,
@@ -78,28 +118,27 @@ if __name__ == '__main__':
     train_spatial_embeddings = train_data['spatial_embeddings']
     train_labels = train_data['labels']
 
-    #Standard normalization
-    norm = tf.keras.layers.Normalization(axis = None, mean = 188.4318877714359, variance = 120971.63484231419)
-    # unnorm = tf.keras.layers.Normalization(axis = None, invert = True)
-    # norm.adapt(train_features[:,0,:])
-    # unnorm.adapt(train_features[:,0,:])
-    norm = MinMax(
+    if normalizer == "standard":
+        #Standard normalization
+        # norm = tf.keras.layers.Normalization(axis = None, mean = 188.4318877714359, variance = 120971.63484231419)
+        norm = StandardNormlaization(mean = 188.4318877714359, std = 347.809768181277)
 
-    transformer_norm = Transformer(
+    else:
+        #MinMax Normalization
+        norm = MinMax()
+        norm.adapt(train_features)
+
+
+    transformer = Transformer(
         normalizer = norm,
         num_layers=num_layers,
         d_model=d_model,
         num_heads=num_heads,
         key_dim = key_dim,
         dff=dff,
+        activation = activation,
         dropout_rate=dropout_rate)
 
-    # print("Transformer result shape: {}".format(transformer_norm([features[:1], time_embeddings[:1], spatial_embeddings[:1]]).shape))
-    # print("Training Label Shape: {}".format(norm(labels[:1]).shape))
-
-    # print(transformer_norm.summary())
-    # print(transformer_norm.get_metrics_result())
-    # print(transformer_norm.non_trainable_weights)
 
     #Tranining Parameters
     loss_fn = tf.losses.MeanSquaredError()
@@ -109,41 +148,32 @@ if __name__ == '__main__':
                                                         patience=5,
                                                         mode='min')
 
-    checkpoint_path = "training_v2/cp.ckpt"
+    checkpoint_path = f"outputs/training_{out_name}/cp.ckpt"
     checkpoint_dir = os.path.dirname(checkpoint_path)
     cp_callback = tf.keras.callbacks.ModelCheckpoint(filepath=checkpoint_path,
                                                  save_weights_only=True,
                                                  verbose=1)
 
     #Training
-    transformer_norm.compile(loss=loss_fn, optimizer=optimizer, metrics=[accuracy_fn])
-    transformer_norm.fit(
+    transformer.compile(loss=loss_fn, optimizer=optimizer, metrics=[accuracy_fn])
+    transformer.fit(
         x = [train_features, train_time_embeddings, train_spatial_embeddings],
         y = norm(train_labels),
         epochs=100,
         callbacks=[early_stopping, cp_callback],
         batch_size=64)
 
-    transformer_norm.save('multivariate_transformer_v2')
+    transformer.save(f"outputs/model_{out_name}")
 
     # transformer_norm = tf.keras.models.load_model('multivariate_transformer')
 
     #Running Results
-    print("")
-    print("Running Predictions")
-    test_features = test_data['features']
-    test_time_embeddings = test_data['time_embeddings']
-    test_spatial_embeddings = test_data['spatial_embeddings']
+    predictions = run_predictions(
+        model = transformer,
+        train_data = train_data,
+        test_data = test_data,
+        metadata = metadata,
+        normalizer = norm)
 
-    train_results = transformer_norm.predict([train_features, train_time_embeddings, train_spatial_embeddings], batch_size = 64)
-    # train_results = unnorm(train_results)
-    test_results = transformer_norm.predict([test_features, test_time_embeddings, test_spatial_embeddings], batch_size = 64)
-    # test_results = unnorm(test_results)
-    list_stations = metadata['list_stations']
-    train_date_index = metadata['train_date_index']
-    test_date_index = metadata['test_date_index']
+    predictions.to_parquet(f'predictions_{out_name}.parquet')
 
-    df_train_results = pd.DataFrame(train_results, columns = list_stations, index = train_date_index)
-    df_test_results = pd.DataFrame(test_results, columns = list_stations, index = test_date_index)
-    df_results = pd.concat((df_train_results,df_test_results), axis = 0 )
-    df_results.to_parquet('transformers_results_v2.parquet')
