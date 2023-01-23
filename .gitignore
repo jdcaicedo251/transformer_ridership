@@ -1,9 +1,9 @@
 # Library 
 
 #outputfiles
-*.parquet
-transformer_ridership/output/*
-data/*
+#*.parquet
+#transformer_ridership/output/*
+#data/*
 
 
 # Byte-compiled / optimized / DLL files
