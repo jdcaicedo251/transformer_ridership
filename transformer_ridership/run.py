@@ -104,6 +104,7 @@ if __name__ == '__main__':
     out_name = args.out_name if args.out_name else "default"
     normalizer = args.normalizer if args.normalizer else "minmax"
     activation = args.activation if args.activation else "relu"
+    activation_axis = (1,2)
 
     train_data, test_data, metadata = tf_data(
         transactions_path,
@@ -136,6 +137,7 @@ if __name__ == '__main__':
         num_heads=num_heads,
         key_dim = key_dim,
         dff=dff,
+        activation_axis = activation_axis,
         activation = activation,
         dropout_rate=dropout_rate)
 
@@ -176,4 +178,3 @@ if __name__ == '__main__':
         normalizer = norm)
 
     predictions.to_parquet(f'predictions_{out_name}.parquet')
-
