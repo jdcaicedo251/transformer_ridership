@@ -28,13 +28,13 @@ def strip_accents(text):
     return str(text).lower()
 
 def read_data(path):
-    df = pd.read_csv(path, parse_dates = ['timestamp'])
+    df = pd.read_parquet(path)
 
     #Clean dataset
-    df.columns = [strip_accents(col) for col in df.columns]
-    stations = df.columns[df.columns.str.contains("\(")]
-    df = df.groupby('timestamp')[stations].sum()
-    df = df[df.index <= pd.Timestamp('2021-04-30 23:45:00')]
+    # df.columns = [strip_accents(col) for col in df.columns]
+    # stations = df.columns[df.columns.str.contains("\(")]
+    # df = df.groupby('timestamp')[stations].sum()
+    # df = df[df.index <= pd.Timestamp('2021-04-30 23:45:00')]
     return df
 
 def add_cycles(df, aggregation = 'day'):
@@ -137,7 +137,7 @@ def min_max(series, desired_range = None):
     max_value = series.max()
     min_value = series.min()
     min_max_norm =  (series - min_value)/(max_value - min_value)
-    
+
     if desired_range:
         t_max = desired_range[0]
         t_min = desired_range[1]
@@ -146,7 +146,7 @@ def min_max(series, desired_range = None):
 
 
 def read_stations(path):
-    stations_df = pd.read_csv(path)
+    stations_df = pd.read_parquet(path)
     stations_df['station_name'] = [strip_accents(col) for col in stations_df.station_name.astype(str)]
     stations_df = stations_df[['station_name','latitude','longitude']].drop_duplicates(subset = 'station_name')
     stations_df['latitude'] = min_max(stations_df['latitude'], (-5,5))
@@ -155,15 +155,14 @@ def read_stations(path):
     return stations_df
 
 
-
 def tf_data(transactions_path, stations_path, aggregation, train_date, max_transactions=None, max_stations=None):
 
     df = clean_data(transactions_path, aggregation =  aggregation)
     stations_df = read_stations(stations_path)
     exog_vars = list(set(df.columns[~df.columns.str.contains("\(")]))
     exog_vars = [
-                'year_sin', 'year_cos', 
-                 'week_sin', 'week_cos', 
+                'year_sin', 'year_cos',
+                 'week_sin', 'week_cos',
                  'day_sin', 'day_cos',
                  'holiday', 'saturday'
                 ]
@@ -213,6 +212,7 @@ def tf_data(transactions_path, stations_path, aggregation, train_date, max_trans
     names = ['features', 'time_embeddings', 'spatial_embeddings', 'labels']
     train_data = {}
     test_data = {}
+    print('')
     for name, element in zip(names,data_points):
         train_data[name] = element[:train_idx]
         test_data[name] = element[train_idx:]
@@ -224,7 +224,7 @@ def tf_data(transactions_path, stations_path, aggregation, train_date, max_trans
                 'train_date_index':df.index[window_length - 1:train_idx + window_length -1],
                 'test_date_index':df.index[train_idx + window_length -1:]}
 
-    print(metadata['train_date_index'].shape)
-    print(metadata['test_date_index'].shape)
+    # print(metadata['train_date_index'].shape)
+    # print(metadata['test_date_index'].shape)
 
     return train_data, test_data, metadata

@@ -319,9 +319,8 @@ class StandardNormlaization(tf.keras.layers.Layer):
     def __init__(self,*, mean = None, std = None):
         super().__init__()
 
-        self.mean = min_value
-        self.std = max_value
-
+        self.mean = mean
+        self.std = std
     def adapt(self, data):
         self.mean = tf.math.reduce_mean(data).numpy()
         self.std = tf.math.reduce_std(data).numpy()

@@ -5,7 +5,7 @@ import tensorflow as tf
 print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 
 from data import tf_data
-from transformer_model_V3 import Transformer, MinMax, StandardNormlaization
+from transformer_model import Transformer, MinMax, StandardNormlaization
 
 def run_predictions(model, train_data, test_data, metadata, normalizer):
 
@@ -85,6 +85,9 @@ if __name__ == '__main__':
     parser.add_argument(
         "-ac", "--activation", action="store",
         help="tensorflow activation function")
+    parser.add_argument(
+        "-att", "--attention", action="store",
+        help="attention axis - temporal(1) or temporal and spatial (2). Default Both")
 
 
     args = parser.parse_args()
@@ -104,7 +107,7 @@ if __name__ == '__main__':
     out_name = args.out_name if args.out_name else "default"
     normalizer = args.normalizer if args.normalizer else "minmax"
     activation = args.activation if args.activation else "relu"
-    activation_axis = (1,2)
+    attention_axes = (1) if args.attention else (1,2)
 
     train_data, test_data, metadata = tf_data(
         transactions_path,
@@ -128,6 +131,8 @@ if __name__ == '__main__':
         #MinMax Normalization
         norm = MinMax()
         norm.adapt(train_features)
+        print (norm.max_x)
+        print (norm.min_x)
 
 
     transformer = Transformer(
@@ -137,7 +142,7 @@ if __name__ == '__main__':
         num_heads=num_heads,
         key_dim = key_dim,
         dff=dff,
-        activation_axis = activation_axis,
+        attention_axes = attention_axes,
         activation = activation,
         dropout_rate=dropout_rate)
 
@@ -177,4 +182,4 @@ if __name__ == '__main__':
         metadata = metadata,
         normalizer = norm)
 
-    predictions.to_parquet(f'predictions_{out_name}.parquet')
+    predictions.to_parquet(f'outputs/predictions_{out_name}.parquet')
