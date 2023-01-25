@@ -206,10 +206,11 @@ def tf_data(transactions_path, stations_path, aggregation, train_date, max_trans
     spatial_embeddings = spatial_embeddings[tf.newaxis,:,:]
     spatial_embeddings = tf.tile(spatial_embeddings, tf.convert_to_tensor([features.shape[0],1,1]))
 
+    status = tf.where(labels == 0, x = labels * 0, y = 1)
 
     # Split train and test
-    data_points = [features, time_embeddings, spatial_embeddings, labels]
-    names = ['features', 'time_embeddings', 'spatial_embeddings', 'labels']
+    data_points = [features, time_embeddings, spatial_embeddings, labels, status]
+    names = ['features', 'time_embeddings', 'spatial_embeddings', 'labels', 'status']
     train_data = {}
     test_data = {}
     print('')

@@ -7,7 +7,7 @@ print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 from data import tf_data
 from transformer_model import Transformer, MinMax, StandardNormlaization
 
-def run_predictions(model, train_data, test_data, metadata, normalizer):
+def run_predictions(model, train_data, test_data, metadata, normalizer, clousures):
 
     print("")
     print("Running Predictions")
@@ -19,16 +19,30 @@ def run_predictions(model, train_data, test_data, metadata, normalizer):
     train_features = train_data['features']
     train_time_embeddings = train_data['time_embeddings']
     train_spatial_embeddings = train_data['spatial_embeddings']
-    train_results = model.predict([train_features, train_time_embeddings, train_spatial_embeddings], batch_size = 64)
-    train_results = normalizer(train_results, reverse = True)
-    df_train_results = pd.DataFrame(train_results, columns = list_stations, index = train_date_index)
-
+    train_status = train_data['status']
 
     test_date_index = metadata['test_date_index']
     test_features = test_data['features']
     test_time_embeddings = test_data['time_embeddings']
     test_spatial_embeddings = test_data['spatial_embeddings']
-    test_results = model.predict([test_features, test_time_embeddings, test_spatial_embeddings], batch_size = 64)
+
+    if clousures:
+        train_status = train_data['status']
+        test_status = test_data['status']
+    else:
+        trian_status = tf.ones_like(train_labels)
+        test_status = tf.ones_like(test_labels)
+
+    train_inputs = [train_features, train_time_embeddings,
+                        train_spatial_embeddings, train_status]
+    test_inputs = [test_features, test_time_embeddings,
+                       test_spatial_embeddings, test_status]
+
+    train_results = model.predict(train_inputs, batch_size = 64)
+    train_results = normalizer(train_results, reverse = True)
+    df_train_results = pd.DataFrame(train_results, columns = list_stations, index = train_date_index)
+
+    test_results = model.predict(test_inputs, batch_size = 64)
     test_results = normalizer(test_results, reverse = True)
     df_test_results = pd.DataFrame(test_results, columns = list_stations, index = test_date_index)
 
@@ -88,6 +102,9 @@ if __name__ == '__main__':
     parser.add_argument(
         "-att", "--attention", action="store",
         help="attention axis - temporal(1) or temporal and spatial (2). Default Both")
+    parser.add_argument(
+        "-c", "--clousures", action='store_true',
+        help="To explicitly account for station clousures")
 
 
     args = parser.parse_args()
@@ -108,6 +125,7 @@ if __name__ == '__main__':
     normalizer = args.normalizer if args.normalizer else "minmax"
     activation = args.activation if args.activation else "relu"
     attention_axes = (1) if args.attention else (1,2)
+    clousures = args.clousures if args.clousures else False
 
     train_data, test_data, metadata = tf_data(
         transactions_path,
@@ -121,6 +139,11 @@ if __name__ == '__main__':
     train_time_embeddings = train_data['time_embeddings']
     train_spatial_embeddings = train_data['spatial_embeddings']
     train_labels = train_data['labels']
+
+    if clousures:
+        train_status = train_data['status']
+    else:
+        train_status = tf.ones_like(train_labels)
 
     if normalizer == "standard":
         #Standard normalization
@@ -161,10 +184,13 @@ if __name__ == '__main__':
                                                  save_weights_only=True,
                                                  verbose=1)
 
+    inputs = [train_features, train_time_embeddings,
+              train_spatial_embeddings, train_status]
+
     #Training
     transformer.compile(loss=loss_fn, optimizer=optimizer, metrics=[accuracy_fn])
     transformer.fit(
-        x = [train_features, train_time_embeddings, train_spatial_embeddings],
+        x = inputs,
         y = norm(train_labels),
         epochs=100,
         callbacks=[early_stopping, cp_callback],
@@ -180,6 +206,7 @@ if __name__ == '__main__':
         train_data = train_data,
         test_data = test_data,
         metadata = metadata,
-        normalizer = norm)
+        normalizer = norm,
+        clousures = clousures)
 
     predictions.to_parquet(f'outputs/predictions_{out_name}.parquet')
