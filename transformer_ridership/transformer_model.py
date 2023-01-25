@@ -121,65 +121,67 @@ class FeedForward(tf.keras.layers.Layer):
         x = self.layer_norm(x)
         return x
 
-# class EncoderLayer(tf.keras.layers.Layer):
-#     def __init__(self,*, d_model, num_heads, key_dim, dff, dropout_rate=0.1):
-#         super().__init__()
-#
-#         self.self_attention_temporal = GlobalSelfAttention(
-#             num_heads=num_heads,
-#             key_dim=key_dim,
-#             dropout=dropout_rate,
-#             attention_axes = (2)
-#             )
-#
-#         # self.self_attention_spatial = GlobalSelfAttention(
-#         #     num_heads=num_heads,
-#         #     key_dim=d_model,
-#         #     dropout=dropout_rate,
-#         #     attention_axes = (2))
-#
-#         self.ffn = FeedForward(d_model, dff)
-#
-#     def call(self, x):
-#         x = self.self_attention_temporal(x)
-#         # x = self.self_attention_spatial(x)
-#         x = self.ffn(x)
-#         return x
+class EncoderLayer(tf.keras.layers.Layer):
+    def __init__(self,*, d_model, num_heads, key_dim, dff, dropout_rate=0.1):
+        super().__init__()
+
+        self.self_attention_temporal = GlobalSelfAttention(
+            num_heads=num_heads,
+            key_dim=key_dim,
+            dropout=dropout_rate,
+            attention_axes = (1,2)
+            )
+
+        # self.self_attention_spatial = GlobalSelfAttention(
+        #     num_heads=num_heads,
+        #     key_dim=d_model,
+        #     dropout=dropout_rate,
+        #     attention_axes = (2))
+
+        self.ffn = FeedForward(d_model, dff)
+
+    def call(self, x):
+        x = self.self_attention_temporal(x)
+        # x = self.self_attention_spatial(x)
+        x = self.ffn(x)
+        return x
 
 
-# class Encoder(tf.keras.layers.Layer):
-#     def __init__(self, *, normalizer, num_layers, d_model, num_heads,
-#                key_dim, dff,  dropout_rate=0.1):
-#         super().__init__()
-#
-#         self.d_model = d_model
-#         self.num_layers = num_layers
-#
-#         self.pos_embedding = PositionalEmbedding(
-#             normalizer, d_model=d_model)
-#
-#         self.enc_layers = [
-#             EncoderLayer(d_model=d_model,
-#                          num_heads=num_heads,
-#                          key_dim = key_dim,
-#                          dff=dff,
-#                          dropout_rate=dropout_rate)
-#             for _ in range(num_layers)]
-#         self.dropout = tf.keras.layers.Dropout(dropout_rate)
-#
-#     def call(self, x):
-#         # `x` is token-IDs shape: (batch, seq_len)
-#
-#         # `x`has (tokes, and Temporal and Positional Embeddings)
-#         x = self.pos_embedding(x)  # Shape `(batch_size, seq_len, d_model)`.
-#
-#         # Add dropout.
-#         x = self.dropout(x)
-#
-#         for i in range(self.num_layers):
-#             x = self.enc_layers[i](x)
-#
-#         return x  # Shape `(batch_size, seq_len, d_model)`.
+class Encoder(tf.keras.layers.Layer):
+    def __init__(self, *, normalizer, num_layers, d_model, num_heads,
+               key_dim, dff,  dropout_rate=0.1):
+        super().__init__()
+
+        self.d_model = d_model
+        self.num_layers = num_layers
+
+        self.pos_embedding = PositionalEmbedding(
+            normalizer, d_model=d_model)
+
+        self.enc_layers = [
+            EncoderLayer(d_model=d_model,
+                         num_heads=num_heads,
+                         key_dim = key_dim,
+                         dff=dff,
+                         dropout_rate=dropout_rate)
+            for _ in range(num_layers)]
+        self.dropout = tf.keras.layers.Dropout(dropout_rate)
+
+    def call(self, inputs):
+        x, time_info, space_info = inputs
+        x = self.pos_embedding([x, time_info, space_info])
+        # `x` is token-IDs shape: (batch, seq_len)
+
+        # `x`has (tokes, and Temporal and Positional Embeddings)
+        # x = self.pos_embedding(x)  # Shape `(batch_size, seq_len, d_model)`.
+
+        # Add dropout.
+        x = self.dropout(x)
+
+        for i in range(self.num_layers):
+            x = self.enc_layers[i](x)
+
+        return x  # Shape `(batch_size, seq_len, d_model)`.
 
 class DecoderLayer(tf.keras.layers.Layer):
     def __init__(self,
@@ -250,9 +252,9 @@ class Transformer(tf.keras.Model):
     def __init__(self, *, normalizer, num_layers, d_model, num_heads, key_dim,
                     dff, attention_axes, activation, dropout_rate=0.1):
         super().__init__()
-        # self.encoder = Encoder(normalizer = normalizer, num_layers=num_layers, d_model=d_model,
-        #                        num_heads=num_heads, key_dim = key_dim, dff=dff,
-        #                        dropout_rate=dropout_rate)
+        self.encoder = Encoder(normalizer = normalizer, num_layers=num_layers, d_model=d_model,
+                               num_heads=num_heads, key_dim = key_dim, dff=dff,
+                               dropout_rate=dropout_rate)
 
         self.p = PositionalEmbedding(normalizer = normalizer, d_model = 10)
 
@@ -270,8 +272,8 @@ class Transformer(tf.keras.Model):
         # context, x = inputs
         context, time_info, space_info, status = inputs
 
-        # context = self.encoder([context, time_info[:,:-1], space_info])  # (batch_size, context_len, d_model)
-        context = self.p([context, time_info[:,:-1], space_info])
+        context = self.encoder([context, time_info[:,:-1], space_info])  # (batch_size, context_len, d_model)
+        # context = self.p([context, time_info[:,:-1], space_info])
 
         x = self.decoder(time_info[:,-1:], space_info, context)  # (batch_size, target_len, d_model)
 

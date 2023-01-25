@@ -192,6 +192,7 @@ def tf_data(transactions_path, stations_path, aggregation, train_date, max_trans
         labels = window[list_stations][-1:]
         features = window[list_stations].iloc[idx_features]
         possition = window[exog_vars].iloc[idx_PE]
+        # status = window[list_stations].iloc[idx_features] ## Fix me: Convert to a bool type
 
         labels_list.append(np.array(labels))
         features_list.append(np.array(features))
