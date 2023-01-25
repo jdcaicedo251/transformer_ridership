@@ -194,7 +194,7 @@ if __name__ == '__main__':
         y = norm(train_labels),
         epochs=100,
         callbacks=[early_stopping, cp_callback],
-        batch_size=64)
+        batch_size=50)
 
     transformer.save(f"outputs/model_{out_name}")
 
