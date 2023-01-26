@@ -262,12 +262,13 @@ class Transformer(tf.keras.Model):
 
         self.final_layer = tf.keras.layers.Dense(1, activation=activation)
         self.reshape = tf.keras.layers.Reshape((-1,))
+        self.clousures = tf.keras.layers.Multiply()
 
     def call(self, inputs):
         # To use a Keras model with `.fit` you must pass all your inputs in the
         # first argument.
         # context, x = inputs
-        context, time_info, space_info = inputs
+        context, time_info, space_info, status = inputs
 
         # context = self.encoder([context, time_info[:,:-1], space_info])  # (batch_size, context_len, d_model)
         context = self.p([context, time_info[:,:-1], space_info])
@@ -286,6 +287,7 @@ class Transformer(tf.keras.Model):
 
         # Return the final output and the attention weights.
         prediction = self.reshape(prediction)
+        prediction = self.clousures([prediction, status])
         return prediction
 
 class MinMax(tf.keras.layers.Layer):
