@@ -29,16 +29,16 @@ class TimeSpaceEmbedding(tf.keras.layers.Layer):
         ])
 
     def call(self, inputs):
-        time_embeddings, spatial_embeddings = inputs
+        time_embeddings, spatial_embeddings, status = inputs
 
         time_embeddings = self.t_embedding(time_embeddings)
         spatial_embeddings = self.s_embedding(spatial_embeddings)
-        embeddings = self.concat([time_embeddings, spatial_embeddings])
+        embeddings = self.concat([time_embeddings, spatial_embeddings, status])
         return embeddings
         # return time_embeddings, spatial_embeddings
 
 class PositionalEmbedding(tf.keras.layers.Layer):
-    def __init__(self, normalizer, d_model = 10):
+    def __init__(self, normalizer, d_model = 11):
         super().__init__()
         self.norm = normalizer
         self.d_model = d_model
@@ -47,14 +47,13 @@ class PositionalEmbedding(tf.keras.layers.Layer):
         self.add = tf.keras.layers.Add()
 
     def call(self, inputs):
-        x, time_embeddings, spatial_embeddings = inputs
+        x, time_embeddings, spatial_embeddings, status = inputs
         x = self.norm(x) # Shape (batch_size, seq_length)
         x = x[:,:,:,tf.newaxis]
         x = self.embedding(x) #Shape (batch_size, seq_length, d_model)
         x *= tf.math.sqrt(tf.cast(self.d_model, tf.float32))
 
-        e = self.ts_embedding([time_embeddings, spatial_embeddings])
-        # x = x + e
+        e = self.ts_embedding([time_embeddings, spatial_embeddings, status])
         x = self.add([x, e])
         return x #Shape (batch_size, seq_length, d_model)
 
@@ -234,9 +233,9 @@ class Decoder(tf.keras.layers.Layer):
 
         self.last_attn_scores = None
 
-    def call(self, time_info, space_info, context):
+    def call(self, time_info, space_info, status, context):
 
-        x = self.ts_embeddings([time_info, space_info])
+        x = self.ts_embeddings([time_info, space_info, status])
 
         for i in range(self.num_layers):
             x  = self.dec_layers[i](x, context)
@@ -271,9 +270,9 @@ class Transformer(tf.keras.Model):
         context, time_info, space_info, status = inputs
 
         # context = self.encoder([context, time_info[:,:-1], space_info])  # (batch_size, context_len, d_model)
-        context = self.p([context, time_info[:,:-1], space_info])
+        context = self.p([context, time_info[:,:-1], space_info, status[:,:-1]])
 
-        x = self.decoder(time_info[:,-1:], space_info, context)  # (batch_size, target_len, d_model)
+        x = self.decoder(time_info[:,-1:], space_info, status[:,-1:], context)  # (batch_size, target_len, d_model)
 
         # Final linear layer output.
         prediction = self.final_layer(x)  # (batch_size, target_len, target_vocab_size)
@@ -287,7 +286,7 @@ class Transformer(tf.keras.Model):
 
         # Return the final output and the attention weights.
         prediction = self.reshape(prediction)
-        prediction = self.clousures([prediction, status])
+#         prediction = self.clousures([prediction, status])
         return prediction
 
 class MinMax(tf.keras.layers.Layer):
