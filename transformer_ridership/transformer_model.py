@@ -7,7 +7,7 @@ class TimeSpaceEmbedding(tf.keras.layers.Layer):
     def __init__(self, *args):
         super().__init__()
 
-        self.concat = tf.keras.layers.Concatenate(axis = 3)
+        self.concat = tf.keras.layers.Concatenate(axis = -1)
         self.add = tf.keras.layers.Add()
 
     def build(self, input_shape):
@@ -33,7 +33,7 @@ class TimeSpaceEmbedding(tf.keras.layers.Layer):
 
         time_embeddings = self.t_embedding(time_embeddings)
         spatial_embeddings = self.s_embedding(spatial_embeddings)
-        embeddings = self.concat([time_embeddings, spatial_embeddings, status])
+        embeddings = self.concat([time_embeddings, spatial_embeddings, status[:,:,:,tf.newaxis]])
         return embeddings
         # return time_embeddings, spatial_embeddings
 
@@ -253,7 +253,7 @@ class Transformer(tf.keras.Model):
         #                        num_heads=num_heads, key_dim = key_dim, dff=dff,
         #                        dropout_rate=dropout_rate)
 
-        self.p = PositionalEmbedding(normalizer = normalizer, d_model = 10)
+        self.p = PositionalEmbedding(normalizer = normalizer, d_model = d_model)
 
         self.decoder = Decoder(num_layers=num_layers, d_model=d_model,
                                num_heads=num_heads, key_dim = key_dim, dff=dff,

@@ -209,7 +209,7 @@ def tf_data(transactions_path, stations_path, aggregation, train_date, max_trans
     # Open/Close status as a dummy variable
     status_f = tf.where(features == 0, x = features * 0, y = 1)
     status_l = tf.where(labels == 0, x = labels * 0, y = 1)
-    status_l = tf.reshape(status_l, (-1, 1, 147))
+    status_l = tf.reshape(status_l, (-1, 1, len(list_stations)))
 
     status = tf.concat([status_f, status_l], axis = 1)
     

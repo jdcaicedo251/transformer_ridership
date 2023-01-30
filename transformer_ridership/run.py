@@ -55,16 +55,16 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(add_help=False)
 
     parser.add_argument(
-        "-l", "--layers", action="store",
+        "-l", "--layers", action="store", type = int,
         help="number of layers")
     parser.add_argument(
-        "-d", "--d_model", action="store",
+        "-d", "--d_model", action="store", type = int,
         help="d model")
     parser.add_argument(
-        "-h", "--heads", action="store",
+        "-h", "--heads", action="store", type = int,
         help="number of heads")
     parser.add_argument(
-        "-dff", "--dff", action="store",
+        "-dff", "--dff", action="store", type = int,
         help="dff")
     parser.add_argument(
         "-dr", "--drop_rate", action="store",
@@ -79,16 +79,16 @@ if __name__ == '__main__':
         "-a", "--aggregation", action="store",
         help="aggregation")
     parser.add_argument(
-        "-sz", "--size", action="store",
+        "-sz", "--size", action="store", type = int,
         help="max size of transactions")
     parser.add_argument(
-        "-st", "--num_stations", action="store",
+        "-st", "--num_stations", action="store", type = int,
         help="number of stations")
     parser.add_argument(
         "-td", "--train_date", action="store",
         help="last day of training")
     parser.add_argument(
-        "-k", "--key_dim", action="store",
+        "-k", "--key_dim", action="store", type = int,
         help="key dimension")
     parser.add_argument(
         "-o", "--out_name", action="store",
@@ -110,7 +110,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     num_layers = args.layers if args.layers else 4
-    d_model = args.d_model if args.d_model else 10
+    d_model = args.d_model if args.d_model else 11
     dff = args.dff if args.dff else 2048
     num_heads = args.heads if args.heads else 8
     dropout_rate = args.drop_rate if args.drop_rate else 0.2
@@ -143,7 +143,7 @@ if __name__ == '__main__':
     if clousures:
         train_status = train_data['status']
     else:
-        train_status = tf.ones_like(train_labels)
+        train_status = tf.ones_like(train_data['status'])
 
     if normalizer == "standard":
         #Standard normalization
