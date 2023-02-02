@@ -5,9 +5,24 @@ import tensorflow as tf
 print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 
 from data import tf_data
-from transformer_model import Transformer, MinMax, StandardNormlaization
+from models.shared_layers import  MinMax, StandardNormlaization
+from models.transformer import Transformer
+from models.LSTM import DeepPF
+from models.CNN import CNN
+from models.FNN import FNN
 
-def run_predictions(model, train_data, test_data, metadata, normalizer, clousures):
+def string_arguments_error(model, closure_mode, normalizer):
+    if model not in ['lstm', 'cnn', 'fnn', 'transformer']:
+        raise ValueError("Invalid argument: string_argument for '--model' must be one of ['lstm', 'cnn', 'fnn', 'transformer']")
+        
+    if closure_mode not in ['mask','dummy',None]:
+        raise ValueError("Invalid argument: string_argument '--closure' must be one of ['mask','dummy', None] ")
+    
+    if normalizer not in ['standard', 'minmax']:
+        raise ValueError("Invalid argument: string_argument '--closure' must be one of ['standard','minmax'] ")
+        
+
+def run_predictions(model_class, train_data, test_data, metadata, normalizer, batch_size):
 
     print("")
     print("Running Predictions")
@@ -25,24 +40,23 @@ def run_predictions(model, train_data, test_data, metadata, normalizer, clousure
     test_features = test_data['features']
     test_time_embeddings = test_data['time_embeddings']
     test_spatial_embeddings = test_data['spatial_embeddings']
+    test_status = test_data['status']
+    
+    if model_class.name == 'transformer':
 
-    if clousures:
-        train_status = train_data['status']
-        test_status = test_data['status']
+        train_inputs = [train_features, train_time_embeddings,
+                            train_spatial_embeddings, train_status]
+        test_inputs = [test_features, test_time_embeddings,
+                           test_spatial_embeddings, test_status]
     else:
-        trian_status = tf.ones_like(train_labels)
-        test_status = tf.ones_like(test_labels)
+        train_inputs = [train_features, train_time_embeddings[:,-1], train_status[:,-1]]
+        test_inputs = [test_features, test_time_embeddings[:,-1], test_status[:,-1]]
 
-    train_inputs = [train_features, train_time_embeddings,
-                        train_spatial_embeddings, train_status]
-    test_inputs = [test_features, test_time_embeddings,
-                       test_spatial_embeddings, test_status]
-
-    train_results = model.predict(train_inputs, batch_size = 64)
+    train_results = model_class.predict(train_inputs, batch_size = batch_size)
     train_results = normalizer(train_results, reverse = True)
     df_train_results = pd.DataFrame(train_results, columns = list_stations, index = train_date_index)
 
-    test_results = model.predict(test_inputs, batch_size = 64)
+    test_results = model_class.predict(test_inputs, batch_size = batch_size)
     test_results = normalizer(test_results, reverse = True)
     df_test_results = pd.DataFrame(test_results, columns = list_stations, index = test_date_index)
 
@@ -54,6 +68,12 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(add_help=False)
 
+    parser.add_argument(
+        "-m", "--model", action="store",
+        help="Model. One of: lstm, cnn, fnn, transformer")
+    parser.add_argument(
+        "-c", "--closure", action='store',
+        help="Closure mode. One of: mask, dummy. Default: None [no closure considered]")
     parser.add_argument(
         "-l", "--layers", action="store", type = int,
         help="number of layers")
@@ -103,12 +123,17 @@ if __name__ == '__main__':
         "-att", "--attention", action="store",
         help="attention axis - temporal(1) or temporal and spatial (2). Default Both")
     parser.add_argument(
-        "-c", "--clousures", action='store_true',
-        help="To explicitly account for station clousures")
-
+        "-e", "--epoch", action="store", type = int,
+        help="training epohcs")
+    parser.add_argument(
+        "-b", "--batch_size", action="store", type = int,
+        help="batch size")
 
     args = parser.parse_args()
+   
 
+    model = args.model
+    closure_mode = args.closure if args.closure else None
     num_layers = args.layers if args.layers else 4
     d_model = args.d_model if args.d_model else 11
     dff = args.dff if args.dff else 2048
@@ -123,9 +148,13 @@ if __name__ == '__main__':
     key_dim = args.key_dim if args.key_dim else 64
     out_name = args.out_name if args.out_name else "default"
     normalizer = args.normalizer if args.normalizer else "minmax"
-    activation = args.activation if args.activation else "relu"
+    activation = args.activation if args.activation else "linear"
     attention_axes = (1) if args.attention else (1,2)
-    clousures = args.clousures if args.clousures else False
+    epochs = args.epoch if args.epoch else 100
+    batch_size = args.batch_size if args.batch_size else 64
+    
+    #Errors
+    string_arguments_error(model, closure_mode, normalizer)
 
     train_data, test_data, metadata = tf_data(
         transactions_path,
@@ -138,38 +167,55 @@ if __name__ == '__main__':
     train_features = train_data['features']
     train_time_embeddings = train_data['time_embeddings']
     train_spatial_embeddings = train_data['spatial_embeddings']
+    train_status = train_data['status']
     train_labels = train_data['labels']
 
-    if clousures:
-        train_status = train_data['status']
-    else:
-        train_status = tf.ones_like(train_data['status'])
-
     if normalizer == "standard":
-        #Standard normalization
-        # norm = tf.keras.layers.Normalization(axis = None, mean = 188.4318877714359, variance = 120971.63484231419)
         norm = StandardNormlaization(mean = 188.4318877714359, std = 347.809768181277)
 
     else:
-        #MinMax Normalization
         norm = MinMax()
         norm.adapt(train_features)
-        print (norm.max_x)
-        print (norm.min_x)
+        
+    inputs = [train_features, train_time_embeddings[:,-1], train_status[:,-1]]
+        
+    if model == "transformer":
 
-
-    transformer = Transformer(
-        normalizer = norm,
-        num_layers=num_layers,
-        d_model=d_model,
-        num_heads=num_heads,
-        key_dim = key_dim,
-        dff=dff,
-        attention_axes = attention_axes,
-        activation = activation,
-        dropout_rate=dropout_rate)
-
-
+        model_class = Transformer(
+                normalizer = norm,
+                num_layers=num_layers,
+                d_model=d_model,
+                num_heads=num_heads,
+                key_dim = key_dim,
+                dff=dff,
+                attention_axes = attention_axes,
+                activation = activation,
+                dropout_rate=dropout_rate,
+                closure_mode = closure_mode,
+                name = model
+        )
+        inputs = [train_features, train_time_embeddings,
+              train_spatial_embeddings, train_status]
+    
+    elif model == 'lstm':
+        model_class = DeepPF(
+            normalizer = norm,
+            closure_mode = closure_mode,
+            name = model
+        )
+    elif model == 'cnn':
+        model_class = CNN(
+            normalizer = norm,
+            closure_mode = closure_mode,
+            name = model
+        )
+    else :
+        model_class = FNN(
+            normalizer = norm,
+            closure_mode = closure_mode,
+            name = model
+        )
+   
     #Tranining Parameters
     loss_fn = tf.losses.MeanSquaredError()
     optimizer = tf.optimizers.Adam(0.001)
@@ -178,35 +224,31 @@ if __name__ == '__main__':
                                                         patience=5,
                                                         mode='min')
 
-    checkpoint_path = f"outputs/training_{out_name}/cp.ckpt"
+    checkpoint_path = f"outputs/{out_name}_{model}_checkpoints/cp.ckpt"
     checkpoint_dir = os.path.dirname(checkpoint_path)
     cp_callback = tf.keras.callbacks.ModelCheckpoint(filepath=checkpoint_path,
                                                  save_weights_only=True,
                                                  verbose=1)
-
-    inputs = [train_features, train_time_embeddings,
-              train_spatial_embeddings, train_status]
-
     #Training
-    transformer.compile(loss=loss_fn, optimizer=optimizer, metrics=[accuracy_fn])
-    transformer.fit(
+    model_class.compile(loss=loss_fn, optimizer=optimizer, metrics=[accuracy_fn])
+    model_class.fit(
         x = inputs,
         y = norm(train_labels),
-        epochs=100,
+        epochs=epochs,
         callbacks=[early_stopping, cp_callback],
-        batch_size=50)
+        batch_size=batch_size)
 
-    transformer.save(f"outputs/model_{out_name}")
+    model_class.save(f"outputs/{out_name}_{model}_model")
 
     # transformer_norm = tf.keras.models.load_model('multivariate_transformer')
 
     #Running Results
     predictions = run_predictions(
-        model = transformer,
+        model_class = model_class,
         train_data = train_data,
         test_data = test_data,
         metadata = metadata,
-        normalizer = norm,
-        clousures = clousures)
+        normalizer = norm, 
+        batch_size = batch_size)
 
-    predictions.to_parquet(f'outputs/predictions_{out_name}.parquet')
+    predictions.to_parquet(f'outputs/{out_name}_{model}_predictions.parquet')
