@@ -107,7 +107,7 @@ def aggreagtion_func(df, aggregation = '15-mins'):
         return df.resample('D').sum()
 
     else:
-        raise ValueError ('parameter {} not understood. Aggregation one of {15-mins,hour,day,month}'.format(aggregation))
+        raise ValueError ('parameter {} not understood. Aggregation one of [15-mins,hour,day,month]'.format(aggregation))
 
 def train_index(df, train_date):
     try:
@@ -154,8 +154,12 @@ def read_stations(path):
 
     return stations_df
 
+def read_adjancency_matrix(path):
+    return pd.read_parquet(path)
 
-def tf_data(transactions_path, stations_path, aggregation, train_date, max_transactions=None, max_stations=None):
+
+def tf_data(transactions_path, stations_path, adjancency_path, 
+            aggregation, train_date, max_transactions=None, max_stations=None):
 
     df = clean_data(transactions_path, aggregation =  aggregation)
     stations_df = read_stations(stations_path)
@@ -167,9 +171,13 @@ def tf_data(transactions_path, stations_path, aggregation, train_date, max_trans
                  'holiday', 'saturday'
                 ]
     list_stations = list(df.columns[df.columns.str.contains("\(")])
+    adj_matrix = read_adjancency_matrix(adjancency_path)
+    
+    #FIXME: Verify Adj Matrix and has the same stations in list stations. Also, it should be ordered by it
 
     if max_stations:
         list_stations = list_stations[:int(max_stations)]
+        adj_matrix = adj_matrix.loc[list_stations, list_stations]
     if max_transactions:
         df = df.iloc[:int(max_transactions)]
 
@@ -213,6 +221,7 @@ def tf_data(transactions_path, stations_path, aggregation, train_date, max_trans
 
     status = tf.concat([status_f, status_l], axis = 1)
     
+    
 
     # Split train and test
     data_points = [features, time_embeddings, spatial_embeddings, labels, status]
@@ -226,12 +235,27 @@ def tf_data(transactions_path, stations_path, aggregation, train_date, max_trans
         print('Train {} shape: {}'.format(name, train_data[name].shape))
         print('Test {} shape: {}'.format(name, test_data[name].shape))
         print('')
+    
 
     metadata = {'list_stations':list_stations,
                 'train_date_index':df.index[window_length - 1:train_idx + window_length -1],
                 'test_date_index':df.index[train_idx + window_length -1:]}
+    
+    
+    # Converting Adj Matix To Tensor
+    window_size = len(idx_features)
+    num_stations = len(list_stations)
+    
+    adj_matrix_model = tf.keras.Sequential([
+            tf.keras.layers.Flatten(),
+            tf.keras.layers.RepeatVector(window_size),
+            tf.keras.layers.Reshape(target_shape = (-1, num_stations,num_stations)),
+            tf.keras.layers.Permute(dims = (2,1,3))
+        ])
+    
+    adj_matrix = tf.convert_to_tensor(adj_matrix)
+    adj_matrix = adj_matrix_model(adj_matrix[tf.newaxis]) 
+    print("Adj Matrix Shape: {}".format(adj_matrix.shape))
+    
 
-    # print(metadata['train_date_index'].shape)
-    # print(metadata['test_date_index'].shape)
-
-    return train_data, test_data, metadata
+    return train_data, test_data, adj_matrix, metadata

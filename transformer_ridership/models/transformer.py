@@ -9,6 +9,8 @@ Vaswani, A., Shazeer, N., Parmar, N., Uszkoreit, J., Jones, L., Gomez, A. N., â€
 (2017). Attention Is All You Need. https://doi.org/10.48550/arxiv.1706.03762
 
 https://www.tensorflow.org/text/tutorials/transformer
+
+This script only considers the decoder component. 
 """
 
 class TimeSpaceEmbedding(tf.keras.layers.Layer):
@@ -81,11 +83,12 @@ class BaseAttention(tf.keras.layers.Layer):
 
         
 class CrossAttention(BaseAttention):
-    def call(self, x, context):
+    def call(self, x, context, mask):
         attn_output, attn_scores = self.mha(
             query=x,
             key=context,
             value=context,
+            attention_mask = mask,
             return_attention_scores=True)
 
         # Cache the attention scores for plotting later.
@@ -148,7 +151,8 @@ class DecoderLayer(tf.keras.layers.Layer):
                key_dim,
                dff,
                attention_axes,
-               dropout_rate=0.1):
+               dropout_rate=0.1, 
+               adj_matrix = None):
         super(DecoderLayer, self).__init__()
 
         # self.causal_self_attention = CausalSelfAttention(
@@ -164,10 +168,11 @@ class DecoderLayer(tf.keras.layers.Layer):
         )
 
         self.ffn = FeedForward(d_model, dff)
+        self.mask = adj_matrix
 
     def call(self, x, context):
 #         x = self.causal_self_attention(x=x)
-        x = self.cross_attention(x=x, context=context)
+        x = self.cross_attention(x=x, context=context, mask = self.mask)
 
         # Cache the last attention scores for plotting later
         self.last_attn_scores = self.cross_attention.last_attn_scores
@@ -178,7 +183,7 @@ class DecoderLayer(tf.keras.layers.Layer):
     
 class Decoder(tf.keras.layers.Layer):
     def __init__(self, *, num_layers, d_model, num_heads, key_dim,
-                 dff, attention_axes, dropout_rate=0.1):
+                 dff, attention_axes, dropout_rate=0.1, adj_matrix = None):
         super(Decoder, self).__init__()
 
         self.d_model = d_model
@@ -190,14 +195,18 @@ class Decoder(tf.keras.layers.Layer):
             DecoderLayer(d_model=d_model, num_heads=num_heads,
                          key_dim = key_dim, dff=dff,
                          attention_axes = attention_axes,
-                         dropout_rate=dropout_rate)
+                         dropout_rate=dropout_rate, 
+                         adj_matrix = adj_matrix)
             for _ in range(num_layers)]
-
+        
+        
         self.last_attn_scores = None
+        
 
     def call(self, time_info, space_info, context, status = None):
 
         x = self.ts_embeddings([time_info, space_info], status = status)
+  
 
         for i in range(self.num_layers):
             x  = self.dec_layers[i](x, context)
@@ -227,14 +236,15 @@ class FinalLayer(tf.keras.layers.Layer):
 class Transformer(tf.keras.Model):
     def __init__(self, *, normalizer, num_layers, d_model, num_heads, key_dim,
                     dff, attention_axes, activation, dropout_rate=0.1, 
-                 closure_mode=None, name='transformer'):
+                 closure_mode=None, adj_matrix = None, name='transformer'):
         super().__init__()
 
         self.PE = PositionalEmbedding(normalizer = normalizer, 
                                       d_model = d_model)
         self.decoder = Decoder(num_layers=num_layers, d_model=d_model,
                                num_heads=num_heads, key_dim = key_dim, dff=dff,
-                               attention_axes= attention_axes, dropout_rate=dropout_rate)
+                               attention_axes= attention_axes, dropout_rate=dropout_rate, 
+                               adj_matrix = adj_matrix)
         self.final_layer = FinalLayer(activation=activation)
         self.closure_mode = closure_mode
 
@@ -269,6 +279,21 @@ class Transformer(tf.keras.Model):
             pass
         
         return x
+    
+class PredictionTransformer(tf.Module):
+    def __init__(self, transformer):
+        self.transformer = transformer
+    
+    
+    @tf.function(input_signature=[
+        tf.TensorSpec(shape=(None, 18, 5), dtype=tf.float64), 
+        tf.TensorSpec(shape=(None, 19, 8), dtype=tf.float64), 
+        tf.TensorSpec(shape=(None, 5, 2), dtype=tf.float64), 
+        tf.TensorSpec(shape=(None, 19, 5), dtype=tf.float64)])
+    def __call__(self, x, time, space, status):
+        prediction = self.transformer([x, time, space, status], training = False)
+        attention_weights = self.transformer.decoder.last_attn_scores
+        return prediction, attention_weights
 
 
 # class Transformer_dummy(tf.keras.Model):

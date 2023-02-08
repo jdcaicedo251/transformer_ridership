@@ -1,4 +1,5 @@
 import tensorflow as tf
+# import numpy as np
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -8,6 +9,36 @@ warnings.filterwarnings("ignore")
 Shared Layers:
 TensorFlow/keras layers that are used accross multiple models. 
 """
+class LogMinMax(tf.keras.layers.Layer):
+    def __init__(self, **kwargs):
+        super(LogMinMax, self).__init__(**kwargs)
+#         self.log = LogTransformation()
+#         self.minmax = MinMax(min_value = min_value, max_value = max_value)
+        
+
+    def call(self, inputs, reverse = False):
+        if reverse: 
+            x = inputs * 9.004422601327041
+            x = tf.math.expm1(x)
+        else: 
+            log_inputs = tf.math.log1p(inputs)
+            x = log_inputs/9.004422601327041
+        return x
+
+
+class LogTransformation(tf.keras.layers.Layer):
+    def __init__(self):
+        super().__init__()
+
+
+    def call(self, x, reverse = False):
+        if reverse:
+            x = tf.math.expm1(x)
+        else:
+            x = tf.math.log1p(x)
+        return x
+
+
 class MinMax(tf.keras.layers.Layer):
     def __init__(self,*, min_value=None, max_value=None, range_values=None):
         super().__init__()
@@ -35,16 +66,20 @@ class MinMax(tf.keras.layers.Layer):
             x = x * (self.max_t - self.min_t) + self.min_t #Range values
         return x
 
+    
 class StandardNormlaization(tf.keras.layers.Layer):
     def __init__(self,*, mean=None, std=None):
         super().__init__()
 
         self.mean = mean
         self.std = std
+        
+        
     def adapt(self, data):
         self.mean = tf.math.reduce_mean(data).numpy()
         self.std = tf.math.reduce_std(data).numpy()
 
+        
     def call(self, x, reverse=False):
         #Raise error is min and max are none.
         if reverse:
@@ -74,6 +109,7 @@ class ExternalLayer(tf.keras.layers.Layer):
         x = tf.transpose(x, perm = [0, 2, 1])
         return x
     
+    
 class closure_dummy(tf.keras.layers.Layer):
     def __init__(self):
         super().__init__()
@@ -93,6 +129,7 @@ class closure_dummy(tf.keras.layers.Layer):
         x = self.reshape(x)
         return x
     
+    
 class closure_mask(tf.keras.layers.Layer):
     def __init__(self):
         super().__init__()
@@ -105,7 +142,6 @@ class closure_mask(tf.keras.layers.Layer):
         
 
     def call(self, inputs, status=None):
-        
         x = self.concat(inputs)
         x = self.dense(x)
         x = self.final_layer(x)

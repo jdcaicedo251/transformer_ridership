@@ -5,21 +5,21 @@ import tensorflow as tf
 print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 
 from data import tf_data
-from models.shared_layers import  MinMax, StandardNormlaization
-from models.transformer import Transformer
+from models.shared_layers import  LogTransformation, MinMax, StandardNormlaization, LogMinMax
+from models.transformer import Transformer, PredictionTransformer
 from models.LSTM import DeepPF
 from models.CNN import CNN
 from models.FNN import FNN
 
 def string_arguments_error(model, closure_mode, normalizer):
-    if model not in ['lstm', 'cnn', 'fnn', 'transformer']:
-        raise ValueError("Invalid argument: string_argument for '--model' must be one of ['lstm', 'cnn', 'fnn', 'transformer']")
+    if model not in ['lstm', 'cnn', 'fnn', 'transformer', 'gnn']:
+        raise ValueError("Invalid argument: string_argument for '--model' must be one of ['lstm', 'cnn', 'fnn', 'transformer', 'gnn']")
         
     if closure_mode not in ['mask','dummy',None]:
         raise ValueError("Invalid argument: string_argument '--closure' must be one of ['mask','dummy', None] ")
     
-    if normalizer not in ['standard', 'minmax']:
-        raise ValueError("Invalid argument: string_argument '--closure' must be one of ['standard','minmax'] ")
+    if normalizer not in ['standard', 'minmax', 'log', 'logminmax']:
+        raise ValueError("Invalid argument: string_argument '--closure' must be one of ['standard','minmax', 'log', 'logminmax'] ")
         
 
 def run_predictions(model_class, train_data, test_data, metadata, normalizer, batch_size):
@@ -128,6 +128,9 @@ if __name__ == '__main__':
     parser.add_argument(
         "-b", "--batch_size", action="store", type = int,
         help="batch size")
+    parser.add_argument(
+        "-ad", "--adjacency", action="store",
+        help="path for adjacency matrix")
 
     args = parser.parse_args()
    
@@ -141,6 +144,7 @@ if __name__ == '__main__':
     dropout_rate = args.drop_rate if args.drop_rate else 0.2
     transactions_path = args.path if args.path else '../data/transactions.parquet'
     stations_path = args.stations if args.stations else '../data/stations_DB.parquet'
+    adj_path = args.adjacency if args.adjacency else '../data/adjacency_matrix.parquet'
     aggregation = args.aggregation if args.aggregation else "15-mins"
     max_stations = args.num_stations if args.num_stations else None
     max_transactions = args.size if args.size else None
@@ -156,9 +160,10 @@ if __name__ == '__main__':
     #Errors
     string_arguments_error(model, closure_mode, normalizer)
 
-    train_data, test_data, metadata = tf_data(
+    train_data, test_data, adj_matrix, metadata = tf_data(
         transactions_path,
         stations_path,
+        adj_path,
         aggregation,
         train_date,
         max_transactions,
@@ -172,6 +177,12 @@ if __name__ == '__main__':
 
     if normalizer == "standard":
         norm = StandardNormlaization(mean = 188.4318877714359, std = 347.809768181277)
+        
+    elif normalizer == 'log':
+        norm = LogTransformation()
+        
+    elif normalizer == 'logminmax':
+        norm = LogMinMax()
 
     else:
         norm = MinMax()
@@ -192,10 +203,31 @@ if __name__ == '__main__':
                 activation = activation,
                 dropout_rate=dropout_rate,
                 closure_mode = closure_mode,
+                adj_matrix = None,
                 name = model
         )
         inputs = [train_features, train_time_embeddings,
-              train_spatial_embeddings, train_status]
+              train_spatial_embeddings, train_status ]
+        
+    elif model == "gnn":
+
+        model_class = Transformer(
+                normalizer = norm,
+                num_layers=num_layers,
+                d_model=d_model,
+                num_heads=num_heads,
+                key_dim = key_dim,
+                dff=dff,
+                attention_axes = attention_axes,
+                activation = activation,
+                dropout_rate=dropout_rate,
+                closure_mode = closure_mode,
+                adj_matrix = adj_matrix,
+                name = model
+        )
+        inputs = [train_features, train_time_embeddings,
+              train_spatial_embeddings, train_status ]
+    
     
     elif model == 'lstm':
         model_class = DeepPF(
@@ -252,3 +284,10 @@ if __name__ == '__main__':
         batch_size = batch_size)
 
     predictions.to_parquet(f'outputs/{out_name}_{model}_predictions.parquet')
+    
+    if model in ["transformer", "gnn"]:
+        final_model = PredictionTransformer(model_class)
+        tf.saved_model.save(final_model, export_dir=f"outputs/{out_name}_{model}_model")
+        
+    else:
+        model_class.save(f"outputs/{out_name}_{model}_model")
