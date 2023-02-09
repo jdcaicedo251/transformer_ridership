@@ -256,11 +256,30 @@ if __name__ == '__main__':
                                                         patience=5,
                                                         mode='min')
 
-    checkpoint_path = f"outputs/{out_name}_{model}_checkpoints/cp.ckpt"
-    checkpoint_dir = os.path.dirname(checkpoint_path)
+    checkpoint_dir = f"outputs/{out_name}_{model}_checkpoint"
+    checkpoint_name = "cp-{epoch:02d}.ckpt"
+    checkpoint_path = os.path.join(checkpoint_dir, checkpoint_name)
     cp_callback = tf.keras.callbacks.ModelCheckpoint(filepath=checkpoint_path,
                                                  save_weights_only=True,
                                                  verbose=1)
+    
+    #Check if Checkpoints are available
+    checkpoint_path_tmp = tf.train.latest_checkpoint(checkpoint_dir)
+
+    if checkpoint_path_tmp is not None:
+        print ("Loading From Last available checkpoint")
+        model_class.load_weights(checkpoint_path_tmp)
+
+        try: 
+            initial_epoch = int(re.search(r'\d+', checkpoint_path_tmp)[0])
+        except TypeError:
+            print ("No epoch found in last checkpoint. Initializing in 0")
+            initial_epoch = 0
+
+    else:
+        initial_epoch = 0
+    
+    
     #Training
     model_class.compile(loss=loss_fn, optimizer=optimizer, metrics=[accuracy_fn])
     model_class.fit(
@@ -268,7 +287,8 @@ if __name__ == '__main__':
         y = norm(train_labels),
         epochs=epochs,
         callbacks=[early_stopping, cp_callback],
-        batch_size=batch_size)
+        batch_size=batch_size, 
+        initial_epoch=initial_epoch)
 
     model_class.save(f"outputs/{out_name}_{model}_model")
 
