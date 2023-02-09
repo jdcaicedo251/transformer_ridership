@@ -286,10 +286,10 @@ class PredictionTransformer(tf.Module):
     
     
     @tf.function(input_signature=[
-        tf.TensorSpec(shape=(None, 18, 5), dtype=tf.float64), 
+        tf.TensorSpec(shape=(None, 18, 147), dtype=tf.float64), 
         tf.TensorSpec(shape=(None, 19, 8), dtype=tf.float64), 
-        tf.TensorSpec(shape=(None, 5, 2), dtype=tf.float64), 
-        tf.TensorSpec(shape=(None, 19, 5), dtype=tf.float64)])
+        tf.TensorSpec(shape=(None, 147, 2), dtype=tf.float64), 
+        tf.TensorSpec(shape=(None, 19, 147), dtype=tf.float64)])
     def __call__(self, x, time, space, status):
         prediction = self.transformer([x, time, space, status], training = False)
         attention_weights = self.transformer.decoder.last_attn_scores
