@@ -1,5 +1,6 @@
 import os
 import argparse
+import re
 import pandas as pd
 import tensorflow as tf
 print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
@@ -256,7 +257,7 @@ if __name__ == '__main__':
                                                         patience=5,
                                                         mode='min')
 
-    checkpoint_dir = f"outputs/{out_name}_{model}_checkpoint"
+    checkpoint_dir = f"outputs/{out_name}_{model}_checkpoints"
     checkpoint_name = "cp-{epoch:02d}.ckpt"
     checkpoint_path = os.path.join(checkpoint_dir, checkpoint_name)
     cp_callback = tf.keras.callbacks.ModelCheckpoint(filepath=checkpoint_path,
@@ -277,6 +278,7 @@ if __name__ == '__main__':
             initial_epoch = 0
 
     else:
+        print("No checkpoint found at {}".format(checkpoint_dir))
         initial_epoch = 0
     
     
