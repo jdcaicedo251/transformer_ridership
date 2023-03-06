@@ -71,7 +71,7 @@ if __name__ == '__main__':
 
     parser.add_argument(
         "-m", "--model", action="store",
-        help="Model. One of: lstm, cnn, fnn, transformer")
+        help="Model. One of: lstm, cnn, fnn, transformer", 'gnn')
     parser.add_argument(
         "-c", "--closure", action='store',
         help="Closure mode. One of: mask, dummy. Default: None [no closure considered]")
@@ -141,7 +141,7 @@ if __name__ == '__main__':
     num_layers = args.layers if args.layers else 4
     d_model = args.d_model if args.d_model else 11
     dff = args.dff if args.dff else 2048
-    num_heads = args.heads if args.heads else 8
+    num_heads = args.heads if args.heads else 4
     dropout_rate = args.drop_rate if args.drop_rate else 0.2
     transactions_path = args.path if args.path else '../data/transactions.parquet'
     stations_path = args.stations if args.stations else '../data/stations_DB.parquet'

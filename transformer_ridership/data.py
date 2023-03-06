@@ -122,11 +122,16 @@ def train_index(df, train_date):
 
 def clean_data(path, aggregation = "15-mins"):
     df = read_data(path)
+    
+    # If transactions less than or equal to 5, assumes station is closed. 
+    if aggregation == "15-mins":
+        df = df.mask(df <= 5, 0)
 
     to_drop_stations = ['(40000) cable portal tunal',
                         '(40001) juan pablo ii',
                         '(40002) manitas',
                         '(40003) mirador del paraiso']
+    
 
     df = df.drop(columns=to_drop_stations)
     df = aggreagtion_func(df, aggregation = aggregation)
@@ -159,7 +164,9 @@ def read_adjancency_matrix(path):
 
 
 def tf_data(transactions_path, stations_path, adjancency_path, 
-            aggregation, train_date, max_transactions=None, max_stations=None):
+            aggregation, train_date, max_transactions=None, max_stations=None,
+            date_range = None):
+            
 
     df = clean_data(transactions_path, aggregation =  aggregation)
     stations_df = read_stations(stations_path)
@@ -178,17 +185,31 @@ def tf_data(transactions_path, stations_path, adjancency_path,
     if max_stations:
         list_stations = list_stations[:int(max_stations)]
         adj_matrix = adj_matrix.loc[list_stations, list_stations]
-    if max_transactions:
+    if max_transactions is not None:
         df = df.iloc[:int(max_transactions)]
+    
+    if date_range is not None:
+        assert len(date_range) == 2
+        assert isinstance(date_range[0], str) and isinstance(date_range[1], str)
+        df = df.loc[date_range[0]:date_range[1]]
+            
 
     # print("DF Shape: {}".format(df.shape))
 
     stations_df = stations_df[stations_df.station_name.isin(list_stations)].set_index('station_name').T
     stations_df = stations_df[list_stations] #Same order as df
 
+#     window_length = 1065
+#     idx_features = [-1065, -533, -153, -77] + list(range(-41,-33)) + list(range(-7,-1))
+#     idx_PE = [-1065, -533, -153, -77] + list(range(-41,-33)) + list(range(-7,0))
+#     train_idx = train_index(df, train_date) - window_length - 1
+    
     window_length = 1065
-    idx_features = [-1065, -533, -153, -77] + list(range(-41,-33)) + list(range(-7,-1))
-    idx_PE = [-1065, -533, -153, -77] + list(range(-41,-33)) + list(range(-7,0))
+    idx_features = [-1065, -533, -153, -77]  + list(range(-7,-1))
+    idx_PE = [-1065, -533, -153, -77] + list(range(-7,0))
+    
+    
+    # TO DO: If train date is not 
     train_idx = train_index(df, train_date) - window_length - 1
 
     labels_list = []

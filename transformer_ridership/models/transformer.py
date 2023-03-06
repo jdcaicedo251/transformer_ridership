@@ -235,8 +235,9 @@ class FinalLayer(tf.keras.layers.Layer):
 
 class Transformer(tf.keras.Model):
     def __init__(self, *, normalizer, num_layers, d_model, num_heads, key_dim,
-                    dff, attention_axes, activation, dropout_rate=0.1, 
+                 dff, attention_axes, activation, dropout_rate=0.1, 
                  closure_mode=None, adj_matrix = None, name='transformer'):
+        
         super().__init__()
 
         self.PE = PositionalEmbedding(normalizer = normalizer, 
