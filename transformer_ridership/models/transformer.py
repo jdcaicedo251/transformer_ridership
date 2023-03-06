@@ -229,7 +229,6 @@ class FinalLayer(tf.keras.layers.Layer):
         
         if status is not None:
             x = self.mul([x, status])
-
         return x
     
 
@@ -260,7 +259,7 @@ class Transformer(tf.keras.Model):
             
         elif self.closure_mode == 'dummy':
             status_contex = status[:,:-1]
-            status_decoder = status[:,-1:]
+            status_decoder = status[:,-1:] 
             status_mask = None
             
         else:

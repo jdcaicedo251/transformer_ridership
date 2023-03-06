@@ -71,7 +71,7 @@ if __name__ == '__main__':
 
     parser.add_argument(
         "-m", "--model", action="store",
-        help="Model. One of: lstm, cnn, fnn, transformer", 'gnn')
+        help="Model. One of: lstm, cnn, fnn, transformer, gnn")
     parser.add_argument(
         "-c", "--closure", action='store',
         help="Closure mode. One of: mask, dummy. Default: None [no closure considered]")
