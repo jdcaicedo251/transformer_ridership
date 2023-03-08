@@ -4,6 +4,7 @@
 #*.parquet
 #transformer_ridership/output/*
 #data/*
+transformer_ridership/output/*_checkpoints
 
 
 # Byte-compiled / optimized / DLL files
