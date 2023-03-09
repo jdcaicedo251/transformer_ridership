@@ -132,6 +132,9 @@ if __name__ == '__main__':
     parser.add_argument(
         "-ad", "--adjacency", action="store",
         help="path for adjacency matrix")
+    parser.add_argument(
+        "-ss", "--step_size", action="store", type = float,
+        help="step size for Adam Gradient Descent Optimization")
 
     args = parser.parse_args()
    
@@ -157,6 +160,7 @@ if __name__ == '__main__':
     attention_axes = (1) if args.attention else (1,2)
     epochs = args.epoch if args.epoch else 100
     batch_size = args.batch_size if args.batch_size else 64
+    step_size = args.step_size if args.step_size else 0.001
     
     #Errors
     string_arguments_error(model, closure_mode, normalizer)
@@ -251,7 +255,7 @@ if __name__ == '__main__':
    
     #Tranining Parameters
     loss_fn = tf.losses.MeanSquaredError()
-    optimizer = tf.optimizers.Adam(0.001)
+    optimizer = tf.optimizers.Adam(step_size)
     accuracy_fn = [tf.metrics.MeanAbsoluteError()]
     early_stopping = tf.keras.callbacks.EarlyStopping(monitor = 'loss',
                                                         patience=5,

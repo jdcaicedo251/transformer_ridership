@@ -7,8 +7,11 @@ class FNNlayer(tf.keras.layers.Layer):
         
         self.temporalDense = tf.keras.Sequential([
             tf.keras.layers.Dense(units = 256),
-            tf.keras.layers.Dense(units = 256),
-            tf.keras.layers.Dense(units = 128),
+            tf.keras.layers.Dropout(0.2),
+            # tf.keras.layers.Dense(units = 256),
+            # tf.keras.layers.Dropout(0.2),
+            # tf.keras.layers.Dense(units = 128),
+            # tf.keras.layers.Dropout(0.2),
             tf.keras.layers.Dense(units = 64)
         ])
         
@@ -17,9 +20,12 @@ class FNNlayer(tf.keras.layers.Layer):
         #  
         num_stations = input_shape[-1]
         self.spatialDense = tf.keras.Sequential([
-            tf.keras.layers.Dense(units = 735),
-            tf.keras.layers.Dense(units = 735),
-            tf.keras.layers.Dense(units = 735),
+            tf.keras.layers.Dense(units = 256),
+            tf.keras.layers.Dropout(0.2),
+            # tf.keras.layers.Dense(units = 256),
+            # tf.keras.layers.Dropout(0.2),
+            # tf.keras.layers.Dense(units = 256),
+            # tf.keras.layers.Dropout(0.2),
             tf.keras.layers.Dense(units = num_stations)
         ])
         self.built = True
@@ -65,53 +71,3 @@ class FNN(tf.keras.Model):
             x = self.mask([x1,x2], status = None)
         
         return x
-    
-    
-# class FNN_dummy(tf.keras.Model):
-#     def __init__(self, normlaizer, **kwargs):
-#         super(DeepPF_dummy, self).__init__( **kwargs)
-        
-#         self.normalizer = normalizer
-#         self.dense = FNNlayer()
-#         self.dummy = closure_dummy()
-
-        
-#     def build(self, input_shape): 
-#         num_station = input_shape[0][-1]
-#         self.external = ExternalLayer(num_station)
-        
-        
-#     def call(self, inputs):
-#         features, time, status = inputs 
-        
-#         features = self.normalizer(features) 
-#         x1 = self.dense(featrues)
-#         x2 = self.external(time)
-#         x = self.dummy([x1,x2], status)
-        
-#         return x
-    
-    
-# class FNN_mask(tf.keras.Model):
-#     def __init__(self, normalizer, **kwargs):
-#         super(DeepPF_dummy, self).__init__( **kwargs)
-        
-#         self.normalizer = normalizer
-#         self.dense = FNNlayer()
-#         self.mask = closure_mask()
-
-        
-#     def build(self, input_shape): 
-#         num_station = input_shape[0][-1]
-#         self.external = ExternalLayer(num_station)
-        
-        
-#     def call(self, inputs):
-#         features, time, status = inputs 
-        
-#         features = self.normalizer(features) 
-#         x1 = self.dense(featrues)
-#         x2 = self.external(time)
-#         x = self.mask([x1,x2], status)
-        
-#         return x
